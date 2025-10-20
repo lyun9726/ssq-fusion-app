@@ -68,50 +68,39 @@ export default function SsqFusionApp() {
     localStorage.removeItem("ssq_predictions");
   };
 
-  // 🧠 智能融合函数（smartFuse）
+  // 🧠 智能融合函数（区间平衡策略）
   const fuse = () => {
+    // 1️⃣ 统计频率
     const redCount = {};
     const blueCount = {};
-
     predictions.forEach((p) => {
       const reds = p.reds.split(/[ ,，]+/).map(Number).filter(Boolean);
       reds.forEach((r) => (redCount[r] = (redCount[r] || 0) + 1));
       if (p.blue) blueCount[p.blue] = (blueCount[p.blue] || 0) + 1;
     });
 
-    // Step 1: 红球按频率排序
-    const sortedReds = Object.entries(redCount)
-      .sort((a, b) => b[1] - a[1] || a[0] - b[0])
-      .map(([r]) => parseInt(r));
+    // 2️⃣ 按红球区间划分（1-11, 12-22, 23-33）
+    const getRange = (n) => (n <= 11 ? 0 : n <= 22 ? 1 : 2);
+    const rangeBuckets = [[], [], []];
+    Object.entries(redCount).forEach(([r, c]) => {
+      rangeBuckets[getRange(Number(r))].push([Number(r), c]);
+    });
 
-    // Step 2: 热号取前 8 随机挑 6（防止死板）
-    const topCandidates = sortedReds.slice(0, 8);
-    while (topCandidates.length < 8) {
-      const random = Math.floor(Math.random() * 33) + 1;
-      if (!topCandidates.includes(random)) topCandidates.push(random);
-    }
-    const reds = topCandidates
-      .sort(() => 0.5 - Math.random())
-      .slice(0, 6)
+    // 3️⃣ 每段取最多的2个号码
+    const reds = rangeBuckets
+      .flatMap((bucket) =>
+        bucket
+          .sort((a, b) => b[1] - a[1] || a[0] - b[0])
+          .slice(0, 2)
+          .map(([r]) => r)
+      )
       .sort((a, b) => a - b);
 
-    // Step 3: 蓝球融合 + 扰动
-    const blueEntries = Object.entries(blueCount).sort((a, b) => b[1] - a[1]);
-    let finalBlue = blueEntries.length ? blueEntries[0][0] : "";
-    if (Math.random() < 0.3) {
-      finalBlue = String(Math.floor(Math.random() * 16) + 1).padStart(2, "0");
-    }
+    // 4️⃣ 蓝球选出现最多的
+    const blues = Object.entries(blueCount).sort((a, b) => b[1] - a[1]);
+    const finalBlue = blues.length ? blues[0][0] : "";
 
-    // Step 4: 奇偶平衡修正
-    const oddCount = reds.filter((r) => r % 2 !== 0).length;
-    if (oddCount < 2 || oddCount > 4) {
-      const candidates = Array.from({ length: 33 }, (_, i) => i + 1);
-      const missing = candidates.filter((n) => !reds.includes(n));
-      const adjust = missing[Math.floor(Math.random() * missing.length)];
-      reds[Math.floor(Math.random() * reds.length)] = adjust;
-      reds.sort((a, b) => a - b);
-    }
-
+    // 5️⃣ 更新结果
     setResult({ reds, blue: finalBlue });
     setQuote(luckyQuotes[Math.floor(Math.random() * luckyQuotes.length)]);
   };
